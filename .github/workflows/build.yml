@@ -2,104 +2,90 @@ name: Build MB Tool APK
 
 on:
   push:
-    branches: [ "main", "dev", "release/**" ]
-    paths-ignore: [ '**.md' ]
+    branches: [main, dev, 'release/**']
   pull_request:
-    branches: [ "main" ]
-    paths-ignore: [ '**.md' ]
-  workflow_dispatch: {}
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build_release_apk:
-    name: Build MB Tool APK
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # ── 2. Java 17 ───────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      # ── 3. Gradle cache ──────────────────────────────────────────────────
       - name: Restore Gradle cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml') }}
-          restore-keys: ${{ runner.os }}-gradle-
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-
 
-      # ── 4. Make gradlew executable ───────────────────────────────────────
       - name: Make gradlew executable
-        run: chmod +x ./gradlew
+        run: chmod +x gradlew
 
-      # ── 5. Extract version ───────────────────────────────────────────────
       - name: Extract version
         id: version
         run: |
           VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          APK_NAME="MBTool-v${VERSION}-build.${{ github.run_number }}.apk"
-          echo "name=${VERSION}" >> $GITHUB_OUTPUT
-          echo "apk_name=${APK_NAME}" >> $GITHUB_OUTPUT
-          echo "Version: ${VERSION}, APK: ${APK_NAME}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk_name=MBTool-v${VERSION}-build.${{ github.run_number }}.apk" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
 
-      # ── 6. Build release APK ─────────────────────────────────────────────
       - name: Build Release APK
         run: |
-          ./gradlew assembleRelease \
-            --no-daemon \
-            --stacktrace \
-            2>&1 | tee build.log
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+          set -euo pipefail
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          echo "=== Build outputs ==="
+          find app/build/outputs -name "*.apk" 2>/dev/null | head -10 || echo "No APKs found"
 
-      # ── 7. Rename APK ────────────────────────────────────────────────────
       - name: Rename APK
         run: |
+          set -euo pipefail
           APK_SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$APK_SRC" "app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}"
-          echo "APK: $(ls -lh app/build/outputs/apk/release/*.apk)"
+          if [ -z "$APK_SRC" ]; then
+            echo "ERROR: No APK found in app/build/outputs/apk/release/"
+            find app/build/outputs -type f | head -20
+            exit 1
+          fi
+          TARGET="app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}"
+          cp "$APK_SRC" "$TARGET"
+          echo "Renamed: $APK_SRC → $TARGET"
+          ls -lh app/build/outputs/apk/release/*.apk
 
-      # ── 8. Create GitHub Release ─────────────────────────────────────────
       - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ steps.version.outputs.name }}-build.${{ github.run_number }}"
-          name: "MB Tool v${{ steps.version.outputs.name }} — Build #${{ github.run_number }}"
+          tag_name: v${{ steps.version.outputs.version }}-build.${{ github.run_number }}
+          name: MB Tool v${{ steps.version.outputs.version }} (Build ${{ github.run_number }})
           body: |
-            ## MB Tool v${{ steps.version.outputs.name }} — Build #${{ github.run_number }}
-
-            **RenderDragon `.material.bin` shader decompile & recompile tool for Android**
-
-            ### Changes
-            - Branch: `${{ github.ref_name }}`
-            - Commit: `${{ github.sha }}`
-
+            ## MB Tool — RenderDragon Shader Decompiler
+            
+            **Build:** ${{ github.run_number }}  
+            **Version:** ${{ steps.version.outputs.version }}  
+            **Commit:** ${{ github.sha }}
+            
+            ### What's included
+            - Decompile `.material.bin` → GLSL/ESSL source + metadata JSON
+            - Recompile edited shaders → `.material.bin` (bit-exact for unchanged shaders)
+            - 100% offline, no root, no Termux
+            
             ### Install
-            Download the APK → enable *Install from unknown sources* → install.
-
-            > Supports decompile (`.material.bin` → GLSL source + metadata) and recompile (folder → `.material.bin`)
+            Download the APK, enable "Install from unknown sources", install.
+          files: app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}
           draft: false
-          prerelease: true
-          files: app/build/outputs/apk/release/MBTool-*.apk
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

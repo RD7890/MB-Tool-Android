@@ -1,6 +1,7 @@
 package com.rohan.mbtool.ui.navigation
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -40,14 +41,14 @@ private val TABS = listOf(
     Tab("Settings", Icons.Rounded.Settings),
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppNavigation() {
     val pagerState = rememberPagerState { TABS.size }
     val scope      = rememberCoroutineScope()
-    val cs         = MaterialTheme.colorScheme
 
     Scaffold(
-        containerColor = cs.background,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(
                 modifier       = Modifier.fillMaxWidth(),
@@ -58,9 +59,13 @@ fun AppNavigation() {
                     val selected = pagerState.currentPage == idx
                     NavigationBarItem(
                         selected = selected,
-                        onClick  = { scope.launch { pagerState.animateScrollToPage(idx, animationSpec = tween(300)) } },
-                        icon     = { Icon(tab.icon, tab.label) },
-                        label    = {
+                        onClick  = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(idx, animationSpec = tween(300))
+                            }
+                        },
+                        icon  = { Icon(tab.icon, tab.label) },
+                        label = {
                             Text(
                                 tab.label,
                                 fontSize   = 11.sp,
@@ -80,12 +85,11 @@ fun AppNavigation() {
         },
     ) { padding ->
         HorizontalPager(
-            state                  = pagerState,
-            modifier               = Modifier
+            state             = pagerState,
+            modifier          = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            beyondViewportPageCount = 1,
-            userScrollEnabled       = true,
+            userScrollEnabled = true,
         ) { page ->
             when (page) {
                 0 -> HomeScreen()

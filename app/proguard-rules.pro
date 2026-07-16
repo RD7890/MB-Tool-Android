@@ -1,0 +1,5 @@
+-keep class com.rohan.mbtool.engine.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn java.awt.**
+-dontwarn javax.swing.**

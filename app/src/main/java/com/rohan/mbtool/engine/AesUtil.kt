@@ -1,6 +1,5 @@
 package com.rohan.mbtool.engine
 
-import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -10,12 +9,12 @@ import javax.crypto.spec.SecretKeySpec
 object AesUtil {
 
     /**
-     * SHA-256 of the MaterialBinTool passphrase decoded to plain UTF-8 bytes.
-     * The passphrase is "those are not the shaders you are looking for! "
-     * We must hash the raw UTF-8 bytes, NOT the Base64 representation.
+     * SHA-256 of the Base64-encoded passphrase string bytes — exactly matching
+     * MaterialBinTool's Util.sha256("dGhvc2U...".getBytes(UTF_8)).
+     * The file stores this digest as the key; we derive it the same way.
      */
     val SIMPLE_PASSPHRASE_KEY: ByteArray by lazy {
-        sha256("those are not the shaders you are looking for! ".toByteArray(StandardCharsets.UTF_8))
+        sha256("dGhvc2UgYXJlIG5vdCB0aGUgc2hhZGVycyB5b3UgYXJlIGxvb2tpbmcgZm9yISA=".toByteArray())
     }
 
     fun sha256(data: ByteArray): ByteArray =

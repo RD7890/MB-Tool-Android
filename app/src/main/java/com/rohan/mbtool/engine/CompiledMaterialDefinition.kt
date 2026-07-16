@@ -45,8 +45,8 @@ class CompiledMaterialDefinition {
         when (encryptionVariant) {
             EncryptionVariants.None -> loadContent(buf)
             EncryptionVariants.SimplePassphrase -> {
-                val key = buf.readBytes(32)      // fixed-size SHA-256 key (no length prefix)
-                val iv  = buf.readBytes(16)      // fixed-size AES-CBC IV (no length prefix)
+                val key = buf.readByteArrayLE()  // length-prefixed SHA-256 digest stored in file
+                val iv  = buf.readByteArrayLE()  // length-prefixed AES-CBC IV
                 val enc = buf.readByteArrayLE()  // length-prefixed encrypted payload
                 loadContent(ByteBuf(AesUtil.decrypt(key, iv, enc)))
             }
@@ -109,8 +109,8 @@ class CompiledMaterialDefinition {
                 val iv  = ByteArray(16).also { SecureRandom().nextBytes(it) }
                 val contentBuf = ByteBuf()
                 saveContent(contentBuf)
-                buf.writeBytes(key)           // fixed-size, no length prefix
-                buf.writeBytes(iv)            // fixed-size, no length prefix
+                buf.writeByteArrayLE(key)  // length-prefixed SHA-256 digest
+                buf.writeByteArrayLE(iv)   // length-prefixed AES-CBC IV
                 buf.writeByteArrayLE(AesUtil.encrypt(key, iv, contentBuf.toByteArray()))
             }
             else -> throw UnsupportedOperationException("Cannot save with $encryption")
@@ -277,10 +277,11 @@ class CompiledMaterialDefinition {
         }
 
         private fun readShaderInputOpaque(buf: ByteBuf) {
-            buf.readByte()    // type ordinal
-            buf.readByte()    // attribute index
-            buf.readByte()    // attribute subIndex
-            buf.readBoolean() // isPerInstance
+            buf.readStringLE()  // shader input name key (missing from original port — corrupts all subsequent reads without this)
+            buf.readByte()      // type ordinal
+            buf.readByte()      // attribute index
+            buf.readByte()      // attribute subIndex
+            buf.readBoolean()   // isPerInstance
             if (buf.readBoolean()) buf.readUnsignedByte() // hasPrecisionConstraint → value
             if (buf.readBoolean()) buf.readUnsignedByte() // hasInterpolationConstraint → value
         }

@@ -45,9 +45,9 @@ class CompiledMaterialDefinition {
         when (encryptionVariant) {
             EncryptionVariants.None -> loadContent(buf)
             EncryptionVariants.SimplePassphrase -> {
-                val key = buf.readByteArrayLE()
-                val iv  = buf.readByteArrayLE()
-                val enc = buf.readByteArrayLE()
+                val key = buf.readBytes(32)      // fixed-size SHA-256 key (no length prefix)
+                val iv  = buf.readBytes(16)      // fixed-size AES-CBC IV (no length prefix)
+                val enc = buf.readByteArrayLE()  // length-prefixed encrypted payload
                 loadContent(ByteBuf(AesUtil.decrypt(key, iv, enc)))
             }
             EncryptionVariants.KeyPair ->
@@ -109,8 +109,8 @@ class CompiledMaterialDefinition {
                 val iv  = ByteArray(16).also { SecureRandom().nextBytes(it) }
                 val contentBuf = ByteBuf()
                 saveContent(contentBuf)
-                buf.writeByteArrayLE(key)
-                buf.writeByteArrayLE(iv)
+                buf.writeBytes(key)           // fixed-size, no length prefix
+                buf.writeBytes(iv)            // fixed-size, no length prefix
                 buf.writeByteArrayLE(AesUtil.encrypt(key, iv, contentBuf.toByteArray()))
             }
             else -> throw UnsupportedOperationException("Cannot save with $encryption")
